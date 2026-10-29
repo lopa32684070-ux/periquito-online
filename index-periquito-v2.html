@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Vida de Periquito</title>
+<style>
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:#8bd16a;font-family:system-ui,sans-serif;color:#fff}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+#hud{position:fixed;top:8px;left:8px;display:flex;flex-direction:column;gap:5px;pointer-events:none}
+.bar,.pill{display:flex;align-items:center;gap:6px;background:#0007;border-radius:20px;padding:4px 10px 4px 6px;font-size:12px}
+.bar i{display:block;width:84px;height:8px;background:#fff3;border-radius:4px;overflow:hidden}
+.bar b{display:block;height:100%;border-radius:4px;transition:width .3s}
+#top{position:fixed;top:8px;right:8px;display:flex;gap:6px;align-items:center}
+.rb{width:46px;height:46px;border-radius:50%;border:0;background:#0008;display:grid;place-items:center;cursor:pointer}
+.rb:active{background:#000b}
+#emo{position:fixed;right:10px;bottom:14px;display:flex;flex-direction:column;gap:8px}
+#hint{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#0007;padding:6px 14px;border-radius:16px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+#chat{position:fixed;left:8px;bottom:8px;width:min(340px,calc(100vw - 80px));background:#000a;border-radius:14px;padding:8px;display:none;flex-direction:column;gap:6px}
+#chat.on{display:flex}
+#msgs{height:150px;overflow-y:auto;font-size:13px;display:flex;flex-direction:column;gap:3px;touch-action:pan-y}
+#msgs b{color:#ffe45c;margin-right:5px}
+.row{display:flex;gap:6px}
+.row input{flex:1;min-width:0;border:0;border-radius:18px;padding:0 12px;font-size:16px;height:40px}
+.row .rb{width:40px;height:40px;background:#2a7de1}
+#login{position:fixed;inset:0;background:linear-gradient(#79c7f0,#c8ecff);display:grid;place-items:center;z-index:9;padding:16px}
+.card{background:#fff;color:#234;border-radius:20px;padding:22px;width:min(360px,100%);text-align:center;display:flex;flex-direction:column;gap:12px;box-shadow:0 8px 30px #0003}
+.card input{border:2px solid #cde;border-radius:12px;height:44px;padding:0 12px;font-size:16px;text-align:center}
+#cols{display:flex;gap:12px;justify-content:center}
+#cols button{width:44px;height:44px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 2px #cde;cursor:pointer}
+#cols button.s{box-shadow:0 0 0 3px #2a7de1}
+#go{height:46px;border:0;border-radius:23px;background:#2a7de1;color:#fff;font-size:17px;font-weight:600;cursor:pointer}
+small{color:#678}
+</style></head><body>
+<div id="login"><div class="card"><h2>Vida de Periquito</h2>
+<small>Voe, encontre sementes e água, descanse nas árvores e converse com outros periquitos.</small>
+<input id="nm" maxlength="14" placeholder="Nome do seu periquito"><div id="cols"></div>
+<button id="go">Voar</button><small id="st"></small></div></div>
+<canvas id="c"></canvas>
+<div id="hud"><div class="bar"><span data-i="seed"></span><i><b id="bh" style="background:#e8b84a"></b></i></div>
+<div class="bar"><span data-i="drop"></span><i><b id="bt" style="background:#3aa0ff"></b></i></div>
+<div class="bar"><span data-i="feather"></span><i><b id="be" style="background:#4cd37b"></b></i></div>
+<div class="pill" id="age"></div></div>
+<div id="top"><div class="pill" id="on"></div><button class="rb" id="tc" data-i="chat"></button></div>
+<div id="emo"><button class="rb" data-e="note" data-i="note"></button><button class="rb" data-e="wing" data-i="wing"></button></div>
+<div id="hint"></div>
+<div id="chat"><div id="msgs"></div><div class="row"><input id="ci" maxlength="140" placeholder="Mensagem..."><button class="rb" id="sd" data-i="send"></button></div></div>
+<script type="module">
+// ===== CONFIGURAÇÃO DO FIREBASE: cole aqui os dados do seu projeto =====
+const CFG={apiKey:"AIzaSyAfqR2383t78cKVHspeyy5wuJ_yvLTAiPY",authDomain:"periquito-online.firebaseapp.com",projectId:"periquito-online",storageBucket:"periquito-online.firebasestorage.app",messagingSenderId:"566329929900",appId:"1:566329929900:web:1120af997e641c9918ef09"};
+// ======================================================================
+const $=i=>document.getElementById(i);
+const ICON={
+seed:[["M12 2c4 3 6 7 6 11a6 6 0 0 1-12 0c0-4 2-8 6-11z","#e8b84a"],["M12 7v11","none","#a9781c"]],
+drop:[["M12 2s7 8 7 13a7 7 0 0 1-14 0c0-5 7-13 7-13z","#3aa0ff"],["M8.5 15a3.5 3.5 0 0 0 3 3.2","none","#fff"]],
+feather:[["M20 3C9 3 5 10 5 17l-2 4 4-2c7 0 13-4 13-16z","#4cd37b"],["M5 19l9-9","none","#fff"]],
+chat:[["M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-8l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z","#fff"]],
+note:[["M9 18V5l11-2v13","none","#fff"],["M9.5 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0z","#fff"],["M20.5 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z","#fff"]],
+wing:[["M3 14c4-1 6-5 8-10 2 3 3 6 3 8 3 0 5-2 7-4 0 7-5 12-12 12-3 0-5-2-6-6z","#fff"]],
+send:[["M3 11L21 3l-8 18-2-7z","#fff"]],
+users:[["M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z","#fff"],["M2 21c0-4 3-7 7-7s7 3 7 7z","#fff"],["M17 4a3.5 3.5 0 0 1 0 7M19 14c2 1 3 3 3 6","none","#fff"]]};
+const ico=(n,s=22)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24">${ICON[n].map(([d,f,st])=>`<path d="${d}" fill="${f}"${st?` stroke="${st}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"`:""}/>`).join("")}</svg>`;
+document.querySelectorAll("[data-i]").forEach(e=>e.insertAdjacentHTML("afterbegin",ico(e.dataset.i)));
+const COL={verde:{b:"#4cc24a",w:"#2f8f3a",h:"#ffe45c"},azul:{b:"#4aa8e8",w:"#2d6fb5",h:"#f4f8ff"},amarelo:{b:"#ffd93b",w:"#e0a800",h:"#fff3a0"},branco:{b:"#f6f6f6",w:"#c4cfe0",h:"#ffffff"}};
+// ----- mundo (determinístico: igual para todos os jogadores) -----
+let sd=7;const R=()=>(sd=sd*16807%2147483647)/2147483647;
+const WW=2400,WH=1600,P=(n,f)=>[...Array(n)].map(f);
+const trees=P(24,()=>({x:100+R()*(WW-200),y:100+R()*(WH-200),r:34+R()*18}));
+const feeders=P(8,()=>({x:80+R()*(WW-160),y:80+R()*(WH-160)}));
+const ponds=P(4,()=>({x:150+R()*(WW-300),y:150+R()*(WH-300),rx:70+R()*40,ry:40+R()*25}));
+const flowers=P(150,()=>({x:R()*WW,y:R()*WH,c:["#fff","#ffd1e8","#fff2a0","#c9b6ff"][R()*4|0]}));
+const patches=P(70,()=>({x:R()*WW,y:R()*WH,r:30+R()*70}));
+// ----- estado -----
+let me={name:"",col:"verde",x:WW/2,y:WH/2,f:1,hu:80,th:80,en:100,age:0,em:"",emT:0,fly:false};
+let others={},bubbles={},chatArr=[],uid="local",db=null,fb=null,ON=false,started=false;
+let selCol="verde";
+try{me.name=localStorage.getItem("pq_n")||"";selCol=localStorage.getItem("pq_c")||"verde"}catch(e){}
+$("nm").value=me.name;
+Object.keys(COL).forEach(k=>{const b=document.createElement("button");b.style.background=COL[k].b;b.title=k;b.onclick=()=>{selCol=k;mark()};b.dataset.k=k;$("cols").append(b)});
+const mark=()=>document.querySelectorAll("#cols button").forEach(b=>b.classList.toggle("s",b.dataset.k===selCol));mark();
+// ----- Firebase -----
+async function net(){
+ if(CFG.apiKey.startsWith("COLE")){$("st").textContent="Modo offline: configure o Firebase para o multiplayer.";return}
+ try{
+  const V="https://www.gstatic.com/firebasejs/10.12.2/";
+  const [a,au,fs]=await Promise.all([import(V+"firebase-app.js"),import(V+"firebase-auth.js"),import(V+"firebase-firestore.js")]);
+  const app=a.initializeApp(CFG),auth=au.getAuth(app);db=fs.getFirestore(app);fb=fs;
+  uid=(await au.signInAnonymously(auth)).user.uid;ON=true;
+  fs.onSnapshot(fs.collection(db,"players"),s=>{s.docChanges().forEach(c=>{
+   const id=c.doc.id;if(id===uid)return;
+   if(c.type==="removed"){delete others[id];return}
+   const v=c.doc.data(),o=others[id]||(others[id]={rx:v.x,ry:v.y,es:0,eT:0});
+   Object.assign(o,{name:v.name,col:v.color,x:v.x,y:v.y,f:v.f,seen:Date.now()});
+   if(v.emT&&v.emT!==o.eT&&Date.now()-o.es>200){o.eT=v.emT;o.em=v.em;o.es=Date.now()}
+  })});
+  let first=true;
+  fs.onSnapshot(fs.query(fs.collection(db,"chat"),fs.orderBy("t","desc"),fs.limit(30)),s=>{
+   if(!first)s.docChanges().forEach(c=>{if(c.type==="added"){const d=c.doc.data();bubbles[d.uid]={t:d.text,at:Date.now()}}});
+   first=false;chatArr=[];s.forEach(d=>chatArr.push(d.data()));chatArr.reverse();renderChat()});
+  setInterval(push,500);
+  addEventListener("beforeunload",()=>fs.deleteDoc(fs.doc(db,"players",uid)));
+ }catch(e){ON=false;$("st").textContent="Erro no Firebase: "+(e.code||e.message)}
+}
+let last={x:0,y:0,e:0,at:0};
+function push(){
+ if(!ON||!started)return;const now=Date.now(),x=Math.round(me.x),y=Math.round(me.y);
+ if(x===last.x&&y===last.y&&me.emT===last.e&&now-last.at<5000)return;
+ last={x,y,e:me.emT,at:now};
+ fb.setDoc(fb.doc(db,"players",uid),{name:me.name,color:me.col,x,y,f:me.f,em:me.em,emT:me.emT,t:fb.serverTimestamp()}).catch(()=>{});
+}
+let lastSend=0;
+function send(){
+ const t=$("ci").value.trim();if(!t||Date.now()-lastSend<1000)return;lastSend=Date.now();$("ci").value="";
+ if(ON)fb.addDoc(fb.collection(db,"chat"),{uid,name:me.name,text:t,t:fb.serverTimestamp()}).catch(()=>{});
+ else{chatArr.push({name:me.name,text:t,uid});bubbles[uid]={t,at:Date.now()};renderChat()}
+}
+function renderChat(){const m=$("msgs");m.innerHTML="";chatArr.forEach(d=>{const r=document.createElement("div"),b=document.createElement("b"),s=document.createElement("span");b.textContent=d.name;s.textContent=d.text;r.append(b,s);m.append(r)});m.scrollTop=1e9}
+$("sd").onclick=send;$("ci").onkeydown=e=>{if(e.key==="Enter")send()};
+$("tc").onclick=()=>$("chat").classList.toggle("on");
+document.querySelectorAll("[data-e]").forEach(b=>b.onclick=()=>{me.em=b.dataset.e;me.emT=Date.now();me.es=Date.now()});
+// ----- entrada -----
+const keys={};let ptr=null;
+addEventListener("keydown",e=>{if(e.target.tagName!=="INPUT")keys[e.key.toLowerCase()]=1});
+addEventListener("keyup",e=>delete keys[e.key.toLowerCase()]);
+const cv=$("c"),ctx=cv.getContext("2d");let VW,VH,dpr;
+const rs=()=>{dpr=devicePixelRatio||1;VW=innerWidth;VH=innerHeight;cv.width=VW*dpr;cv.height=VH*dpr};onresize=rs;rs();
+cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);ptr={x:e.clientX,y:e.clientY}};
+cv.onpointermove=e=>{if(ptr)ptr={x:e.clientX,y:e.clientY}};
+cv.onpointerup=cv.onpointercancel=()=>ptr=null;
+$("go").onclick=async()=>{
+ me.name=($("nm").value.trim()||"Periquito").slice(0,14);me.col=selCol;
+ try{localStorage.setItem("pq_n",me.name);localStorage.setItem("pq_c",me.col)}catch(e){}
+ $("login").style.display="none";started=true;$("chat").classList.toggle("on",innerWidth>700);push();
+};
+net();
+// ----- desenho -----
+function icon(n,x,y,s){ctx.save();ctx.translate(x,y);ctx.scale(s/24,s/24);ICON[n].forEach(([d,f,st])=>{const p=new Path2D(d);if(f!=="none"){ctx.fillStyle=f;ctx.fill(p)}if(st){ctx.strokeStyle=st;ctx.lineWidth=1.8;ctx.lineCap="round";ctx.stroke(p)}});ctx.restore()}
+function bird(x,y,f,k,fl,t,name,em,say){
+ const C=COL[k]||COL.verde;
+ ctx.fillStyle="#0003";ctx.beginPath();ctx.ellipse(x,y+26,15,5,0,0,7);ctx.fill();
+ const by=y-(fl?12+Math.sin(t*6)*3:0);
+ ctx.save();ctx.translate(x,by);ctx.scale(f,1);
+ ctx.fillStyle=C.w;ctx.beginPath();ctx.moveTo(-8,4);ctx.lineTo(-32,20);ctx.lineTo(-27,24);ctx.lineTo(-6,11);ctx.fill();
+ if(!fl){ctx.strokeStyle="#e8a060";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-2,9);ctx.lineTo(-2,22);ctx.moveTo(5,9);ctx.lineTo(5,22);ctx.stroke()}
+ ctx.fillStyle=C.b;ctx.beginPath();ctx.ellipse(0,0,15,11,0,0,7);ctx.fill();
+ ctx.fillStyle=C.h;ctx.beginPath();ctx.arc(9,-9,8.5,0,7);ctx.fill();
+ ctx.fillStyle="#7a5cc7";ctx.beginPath();ctx.ellipse(8,-6,2.6,1.7,0,0,7);ctx.fill();
+ ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(11.5,-11,2.6,0,7);ctx.fill();
+ ctx.fillStyle="#111";ctx.beginPath();ctx.arc(12,-11,1.3,0,7);ctx.fill();
+ ctx.fillStyle="#f0a040";ctx.beginPath();ctx.moveTo(16,-11);ctx.lineTo(22,-7);ctx.lineTo(16,-4);ctx.fill();
+ ctx.fillStyle="#8fc4f0";ctx.fillRect(14,-12,3,3);
+ ctx.save();ctx.translate(-2,-3);ctx.rotate(fl?Math.sin(t*18)*.9-.5:.2);ctx.fillStyle=C.w;ctx.beginPath();ctx.ellipse(-8,0,14,5.5,0,0,7);ctx.fill();ctx.restore();
+ ctx.restore();
+ ctx.font="bold 12px system-ui";ctx.textAlign="center";ctx.lineWidth=3;ctx.strokeStyle="#0007";ctx.fillStyle="#fff";
+ ctx.strokeText(name,x,by-26);ctx.fillText(name,x,by-26);
+ if(em){ctx.fillStyle="#0009";ctx.beginPath();ctx.arc(x,by-52,16,0,7);ctx.fill();icon(em,x-11,by-63,22)}
+ else if(say){const w=Math.min(180,ctx.measureText(say).width+16);ctx.fillStyle="#fffe";ctx.beginPath();ctx.roundRect(x-w/2,by-58,w,22,10);ctx.fill();ctx.fillStyle="#234";ctx.fillText(say.length>26?say.slice(0,25)+"...":say,x,by-43)}
+}
+let tPrev=0,hintT=0;
+function loop(ts){
+ requestAnimationFrame(loop);const t=ts/1000,dt=Math.min(.05,t-tPrev);tPrev=t;
+ let dx=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),dy=(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0);
+ const cx=Math.max(0,Math.min(WW-VW,me.x-VW/2)),cy=Math.max(0,Math.min(WH-VH,me.y-VH/2));
+ if(ptr){const ex=ptr.x-(me.x-cx),ey=ptr.y-(me.y-cy);if(Math.hypot(ex,ey)>18){dx=ex;dy=ey}}
+ const l=Math.hypot(dx,dy),mv=started&&l>0;
+ if(mv){const sp=(me.en>0?200:80)*dt;me.x=Math.max(20,Math.min(WW-20,me.x+dx/l*sp));me.y=Math.max(50,Math.min(WH-30,me.y+dy/l*sp));if(Math.abs(dx)>4)me.f=dx>0?1:-1}
+ me.fly=mv;
+ if(started){
+  me.age+=dt;me.hu-=.7*dt;me.th-=.9*dt;me.en+=(mv?-1.6:1.5)*dt;let h="";
+  feeders.forEach(f=>{if(Math.hypot(me.x-f.x,me.y-f.y)<55){me.hu+=30*dt;h="Comendo sementes"}});
+  ponds.forEach(p=>{if(((me.x-p.x)/(p.rx+30))**2+((me.y-p.y)/(p.ry+30))**2<1){me.th+=35*dt;h="Bebendo água"}});
+  trees.forEach(r=>{if(!mv&&Math.hypot(me.x-r.x,me.y-r.y)<r.r+30){me.en+=10*dt;h="Descansando na árvore"}});
+  me.hu=Math.min(100,me.hu);me.th=Math.min(100,me.th);me.en=Math.max(0,Math.min(100,me.en));
+  if(me.hu<=0||me.th<=0){h=me.hu<=0?"Você desmaiou de fome e renasceu!":"Você desmaiou de sede e renasceu!";hintT=3;me.hu=me.th=60;me.en=100;me.age=0;me.x=WW/2;me.y=WH/2}
+  if(h&&h.indexOf("desmaiou")<0)hintT=.3;if(hintT>0){hintT-=dt;$("hint").textContent=h||$("hint").textContent;$("hint").style.opacity=1}else $("hint").style.opacity=0;
+  $("bh").style.width=me.hu+"%";$("bt").style.width=me.th+"%";$("be").style.width=me.en+"%";
+  $("age").textContent="Vida: "+(me.age/60|0)+":"+String(me.age%60|0).padStart(2,"0");
+  if(Date.now()-me.emT>3000)me.em="";
+ }
+ // desenhar
+ ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#8bd16a";ctx.fillRect(0,0,VW,VH);ctx.translate(-cx,-cy);
+ ctx.fillStyle="#7cc45c";patches.forEach(p=>{ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fill()});
+ ponds.forEach(p=>{ctx.fillStyle="#cdb98a";ctx.beginPath();ctx.ellipse(p.x,p.y,p.rx+8,p.ry+8,0,0,7);ctx.fill();ctx.fillStyle="#4fb3ea";ctx.beginPath();ctx.ellipse(p.x,p.y,p.rx,p.ry,0,0,7);ctx.fill();ctx.strokeStyle="#bfe6fb";ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(p.x,p.y,p.rx*.6,p.ry*.5,0,0,4);ctx.stroke()});
+ flowers.forEach(f=>{ctx.fillStyle=f.c;ctx.beginPath();ctx.arc(f.x,f.y,3,0,7);ctx.fill();ctx.fillStyle="#f5c518";ctx.fillRect(f.x-1,f.y-1,2,2)});
+ feeders.forEach(f=>{ctx.fillStyle="#8a5a2b";ctx.fillRect(f.x-26,f.y-6,52,22);ctx.fillStyle="#a8743a";ctx.fillRect(f.x-26,f.y-6,52,6);ctx.fillStyle="#e8b84a";ctx.beginPath();ctx.ellipse(f.x,f.y-6,20,7,0,0,7);ctx.fill();ctx.fillStyle="#a9781c";for(let i=-2;i<3;i++)ctx.fillRect(f.x+i*7,f.y-7,2,2)});
+ trees.forEach(r=>{ctx.fillStyle="#0002";ctx.beginPath();ctx.ellipse(r.x,r.y+r.r*.9,r.r,r.r*.35,0,0,7);ctx.fill();ctx.fillStyle="#7a4f27";ctx.fillRect(r.x-6,r.y-4,12,r.r);
+  ctx.fillStyle="#2f9a3f";[[0,-r.r*.5,r.r],[-r.r*.55,-r.r*.15,r.r*.7],[r.r*.55,-r.r*.15,r.r*.7]].forEach(([a,b,c])=>{ctx.beginPath();ctx.arc(r.x+a,r.y+b,c,0,7);ctx.fill()});ctx.fillStyle="#3fb54f";ctx.beginPath();ctx.arc(r.x-r.r*.2,r.y-r.r*.7,r.r*.45,0,7);ctx.fill()});
+ const list=[{y:me.y,me:1}],now=Date.now();let n=1;
+ for(const id in others){const o=others[id];if(now-o.seen>20000)continue;n++;
+  const d=Math.hypot(o.x-o.rx,o.y-o.ry);o.fl=d>1.5;o.rx+=(o.x-o.rx)*Math.min(1,dt*8);o.ry+=(o.y-o.ry)*Math.min(1,dt*8);list.push({y:o.ry,o,id})}
+ list.sort((a,b)=>a.y-b.y).forEach(it=>{
+  const o=it.o,id=it.me?uid:it.id,b=bubbles[id],say=b&&now-b.at<6000?b.t:"";
+  if(it.me)bird(me.x,me.y,me.f,me.col,me.fly,t,me.name,me.em,say);
+  else bird(o.rx,o.ry,o.f||1,o.col,o.fl,t+o.x%5,o.name||"?",now-o.es<3000?o.em:"",say)});
+ $("on").innerHTML=ico("users",16)+" "+(ON?n:"offline "+n);
+}
+requestAnimationFrame(loop);
+</script></body></html>
